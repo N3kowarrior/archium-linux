@@ -3,7 +3,7 @@
 ## Warning still not producing working installation 🔴
 - DO NOT REPORT ISSUES 🔴, DO NOT INSTALL ON REAL HARDWARE 🔴
 ## Features: 🧰
-- Linux ltg kernel
+- Linux ltg kernel [https://github.com/frogging-family/linux-tkg]
 - Easy installer
 - Automatic configuration
 - Preinstallation of Paru and Selection of programs (This feature will expand, not it make take while for it to compile)
