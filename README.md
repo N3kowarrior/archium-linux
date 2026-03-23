@@ -22,6 +22,20 @@
 
 ## Showcase: 🖼️
 ### Archium linux with Ext4 in vm:
-![Archium Screenshot](showcase_ext4/screenshot_ext4.png)
+![Archium Screenshot](assets/screenshot_ext4.png)
+- Currently buggless, virtual machine use only
 ### Archium linux with BTRFS in vm:
-![Archium Screenshot](showcase_ext4/screenshot_btrfs.png)
+![Archium Screenshot](assets/screenshot_btrfs.png)
+- Warning, install script fails at the end while installing with btrfs, ignore it and reboot your vm
+
+## Downloads for early testers: 📁
+### Filebin (29.3.26):
+- [Download from here](https://filebin.net/lqb8j7witntvgjsf)
+### Wormhole only until (24.3.26):
+- [Download from here](https://wormhole.app/eERllY#zLOwNrQgniXQppm_UE2qag)
+### file.kiwi:
+- [Download from here](https://file.kiwi/9ebe7b8f#ur9IPaxfqSQurFa-11Gu9g)
+### filemail.com (30.3.26):
+- [Download from here](https://www.filemail.com/d/lyrlpwudebfouve)
+### google drive:
+- [Download from here](https://drive.google.com/file/d/1rNEXi0gsDmmlOPo0eYueUnwWPWGKrOtt/view?usp=sharing)
