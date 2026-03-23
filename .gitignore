@@ -1,0 +1,15 @@
+# BackupFiles so I don't have to recompile kernels while patches or make iso fails
+.BackupFiles
+archium_repo
+linux-tkg
+archium-linux-iso
+/tmp/
+.cache/
+*.log
+# Archiso
+workdir/
+out/
+# Build artifacts
+*.iso
+*.pkg.tar.zst
+*.img

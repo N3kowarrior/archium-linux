@@ -1,0 +1,55 @@
+# =========================================================
+# Archium dialog theme
+# Place in ISO as: /etc/archium-dialogrc
+# =========================================================
+
+use_colors = ON
+use_shadow = ON
+use_scrollbar = ON
+
+screen_color = (WHITE,BLACK,OFF)
+shadow_color = (BLACK,BLACK,OFF)
+
+dialog_color = (WHITE,BLACK,OFF)
+title_color = (CYAN,BLACK,ON)
+border_color = (CYAN,BLACK,ON)
+
+button_active_color = (BLACK,CYAN,ON)
+button_inactive_color = (WHITE,BLACK,OFF)
+
+button_key_active_color = (YELLOW,CYAN,ON)
+button_key_inactive_color = (YELLOW,BLACK,ON)
+
+button_label_active_color = (BLACK,CYAN,ON)
+button_label_inactive_color = (WHITE,BLACK,OFF)
+
+inputbox_color = (WHITE,BLACK,OFF)
+inputbox_border_color = (CYAN,BLACK,ON)
+
+searchbox_color = (WHITE,BLACK,OFF)
+searchbox_title_color = (CYAN,BLACK,ON)
+searchbox_border_color = (CYAN,BLACK,ON)
+
+position_indicator_color = (YELLOW,BLACK,ON)
+menubox_color = (WHITE,BLACK,OFF)
+menubox_border_color = (CYAN,BLACK,ON)
+
+item_color = (WHITE,BLACK,OFF)
+item_selected_color = (BLACK,CYAN,ON)
+
+tag_color = (CYAN,BLACK,ON)
+tag_selected_color = (BLACK,CYAN,ON)
+
+check_color = (WHITE,BLACK,OFF)
+check_selected_color = (BLACK,CYAN,ON)
+
+uarrow_color = (CYAN,BLACK,ON)
+darrow_color = (CYAN,BLACK,ON)
+itemhelp_color = (WHITE,BLACK,OFF)
+
+form_active_text_color = (BLACK,CYAN,ON)
+form_text_color = (WHITE,BLACK,OFF)
+
+gauge_color = (BLACK,CYAN,ON)
+border2_color = (CYAN,BLACK,ON)
+inputbox_border2_color = (CYAN,BLACK,ON)

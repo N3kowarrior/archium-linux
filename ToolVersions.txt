@@ -1,0 +1,3 @@
+archiso 87-1
+#Additional Info
+Debugging in vm.: cat /tmp/archium-install-error.log
