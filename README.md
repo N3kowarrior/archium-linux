@@ -22,10 +22,10 @@
 
 ## Showcase: 🖼️
 ### Archium linux with Ext4 in vm:
-![Archium Screenshot](assets/screenshot_ext4.png)
+![Archium Screenshot](https://github.com/N3kowarrior/archium-linux/blob/main/assets/showcase_ext4.png)
 - Currently buggless, virtual machine use only
 ### Archium linux with BTRFS in vm:
-![Archium Screenshot](assets/screenshot_btrfs.png)
+![Archium Screenshot](https://github.com/N3kowarrior/archium-linux/blob/main/assets/showcase_btrfs.png)
 - Warning, install script fails at the end while installing with btrfs, ignore it and reboot your vm
 
 ## Downloads for early testers: 📁
