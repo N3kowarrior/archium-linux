@@ -1,3 +1,5 @@
+Currently.:
 archiso 87-1
+
 #Additional Info
-Debugging in vm.: cat /tmp/archium-install-error.log
+Debugging in vm.: cat /tmp/archium-install-error.log and cat /tmp/archium.conf, for informations from installer.
