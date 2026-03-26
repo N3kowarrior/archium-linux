@@ -1,6 +1,8 @@
 # BackupFiles so I don't have to recompile kernels while patches or make iso fails
 .BackupFiles
-archium_repo
+archium-repo
+archium-repo-aur
+aur-build
 linux-tkg
 archium-linux-iso
 /tmp/

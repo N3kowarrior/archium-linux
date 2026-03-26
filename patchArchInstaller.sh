@@ -5,7 +5,7 @@ set -e
 ISO_DIR="archium-linux-iso"
 PATCH_DIR="patches"
 LINUX_TKG_DIR="linux-tkg"
-REPO_DIR="archium_repo"
+REPO_DIR="archium-repo"
 INTERNAL_REPO_DEST="$ISO_DIR/airootfs/opt/archium_repo"
 
 OLD_KERN="vmlinuz-linux"
@@ -14,7 +14,7 @@ OLD_INIT="initramfs-linux.img"
 NEW_INIT="initramfs-linux-archium-tkg-x86-64.img"
 
 PRESET_FILE_MK="$ISO_DIR/airootfs/etc/mkinitcpio.d/linux.preset"
-INSTALLER_SRC="$PATCH_DIR/InstallerScripts"
+INSTALLER_SRC="$PATCH_DIR/installerScripts"
 
 # --- Theming ---
 THEME_SRC="$PATCH_DIR/theme/archium-dialogrc"
@@ -22,10 +22,11 @@ THEME_DEST="$ISO_DIR/airootfs/etc/archium-dialogrc"
 
 # --- 1. Artwork ---
 echo "🎨 Injecting Artwork ..."
-if [ -d "$PATCH_DIR" ]; then
-    cp "$PATCH_DIR/arts/Splash/splash.png" "$ISO_DIR/syslinux/splash.png" 2>/dev/null || echo "⚠️ Splash image not found"
+if [ -d "$PATCH_DIR/theme" ]; then
+    cp "$PATCH_DIR/theme/arts/Splash/splash.png" "$ISO_DIR/syslinux/splash.png" 2>/dev/null || echo "⚠️ Splash image not found"
 
-    WP_SRC="$PATCH_DIR/arts/Backgrounds"
+    # Wallpapers
+    WP_SRC="$PATCH_DIR/theme/arts/Backgrounds"
     WP_DEST="$ISO_DIR/airootfs/usr/share/wallpapers/Archium/contents/images"
     mkdir -p "$WP_DEST"
 
@@ -36,16 +37,59 @@ if [ -d "$PATCH_DIR" ]; then
 
         if [ ${#WALLPAPERS[@]} -gt 0 ]; then
             cp "${WALLPAPERS[@]}" "$WP_DEST/"
-        fi
-
-        if [ -f "$WP_DEST/Simple_Dark.png" ]; then
-            ln -sf "Simple_Dark.png" "$WP_DEST/default.png"
             echo "✅ Wallpapers injected successfully."
         else
-            echo "⚠️ Simple_Dark.png not found; default.png symlink might be broken."
+            echo "⚠️ No wallpaper PNG files found in $WP_SRC"
         fi
     else
         echo "❌ ERROR: Wallpaper source not found at $WP_SRC"
+    fi
+
+    # Logo
+    LOGO_SRC="$PATCH_DIR/theme/arts/Logo/logo.png"
+    ICON_DEST="$ISO_DIR/airootfs/usr/share/icons/hicolor/128x128/apps/archium.png"
+    PIXMAP_DEST="$ISO_DIR/airootfs/usr/share/pixmaps/archium.png"
+
+    mkdir -p "$(dirname "$ICON_DEST")"
+    mkdir -p "$(dirname "$PIXMAP_DEST")"
+
+    if [ -f "$LOGO_SRC" ]; then
+        cp "$LOGO_SRC" "$ICON_DEST"
+        cp "$LOGO_SRC" "$PIXMAP_DEST"
+        echo "✅ Logo injected successfully."
+    else
+        echo "⚠️ Logo not found at $LOGO_SRC"
+    fi
+
+    # Fastfetch
+    FASTFETCH_ASCII_SRC="$PATCH_DIR/theme/fastfetch-archium-ascii.txt"
+    FASTFETCH_DIR="$ISO_DIR/airootfs/etc/fastfetch"
+    FASTFETCH_CFG_DEST="$FASTFETCH_DIR/config.jsonc"
+    FASTFETCH_LOGO_DEST="$FASTFETCH_DIR/logo.txt"
+    FASTFETCH_SKEL_DEST="$ISO_DIR/airootfs/etc/skel/.config/fastfetch/config.jsonc"
+
+    mkdir -p "$FASTFETCH_DIR"
+    mkdir -p "$(dirname "$FASTFETCH_SKEL_DEST")"
+
+    if [ -f "$FASTFETCH_ASCII_SRC" ]; then
+        cp "$FASTFETCH_ASCII_SRC" "$FASTFETCH_LOGO_DEST"
+
+        cat > "$FASTFETCH_CFG_DEST" <<'EOF'
+{
+  "logo": {
+    "type": "file",
+    "source": "/etc/fastfetch/logo.txt",
+    "color": {
+      "1": "white"
+    }
+  }
+}
+EOF
+
+        cp "$FASTFETCH_CFG_DEST" "$FASTFETCH_SKEL_DEST"
+        echo "✅ Fastfetch branding injected successfully."
+    else
+        echo "⚠️ Fastfetch ASCII art not found at $FASTFETCH_ASCII_SRC"
     fi
 fi
 
@@ -58,16 +102,16 @@ find . -maxdepth 1 -name "linux-archium-tkg-*.pkg.tar.zst" -exec mv -f {} "$REPO
 find "$LINUX_TKG_DIR" -maxdepth 1 -name "linux-archium-tkg-*.pkg.tar.zst" -exec mv -f {} "$REPO_DIR/" \; 2>/dev/null
 
 shopt -s nullglob
-KERNEL_PKGS=("$REPO_DIR"/*.pkg.tar.zst)
+REPO_PKGS=("$REPO_DIR"/*.pkg.tar.zst)
 shopt -u nullglob
 
-if [ ${#KERNEL_PKGS[@]} -gt 0 ]; then
-    echo "🗃️ Found ${#KERNEL_PKGS[@]} packages. Generating repository database..."
+if [ ${#REPO_PKGS[@]} -gt 0 ]; then
+    echo "🗃️ Found ${#REPO_PKGS[@]} packages. Generating repository database..."
 
     rm -f "$REPO_DIR/archium.db" "$REPO_DIR/archium.db.tar.gz" \
           "$REPO_DIR/archium.files" "$REPO_DIR/archium.files.tar.gz"
 
-    repo-add "$REPO_DIR/archium.db.tar.gz" "${KERNEL_PKGS[@]}"
+    repo-add "$REPO_DIR/archium.db.tar.gz" "${REPO_PKGS[@]}"
 
     mkdir -p "$INTERNAL_REPO_DEST"
     cp -r "$REPO_DIR"/. "$INTERNAL_REPO_DEST/"
@@ -86,7 +130,7 @@ if [ -f "$PACMAN_CONF" ]; then
     sed -i '/^\[archium\]$/,/^$/d' "$PACMAN_CONF"
 
     # Remove any old multilib block, then append a clean one
-    sed -i '/^\#\?\[multilib\]$/,/^\s*Include = \/etc\/pacman.d\/mirrorlist\s*$/d' "$PACMAN_CONF"
+    sed -i '/^#\?\[multilib\]$/,/^[[:space:]]*Include = \/etc\/pacman.d\/mirrorlist[[:space:]]*$/d' "$PACMAN_CONF"
 
     cat >> "$PACMAN_CONF" <<EOF
 
@@ -162,8 +206,11 @@ if [ -d "$INSTALLER_SRC" ]; then
     mkdir -p "$ISO_DIR/airootfs/root"
     cp "$INSTALLER_SRC/archium-setup.sh" "$ISO_DIR/airootfs/root/"
     cp "$INSTALLER_SRC/archium-install.sh" "$ISO_DIR/airootfs/root/"
+    cp "$INSTALLER_SRC/archium-configure.sh" "$ISO_DIR/airootfs/root/"
+    cp "$INSTALLER_SRC/.software-menu-pkgs" "$ISO_DIR/airootfs/root/"
     chmod +x "$ISO_DIR/airootfs/root/archium-setup.sh"
     chmod +x "$ISO_DIR/airootfs/root/archium-install.sh"
+    chmod +x "$ISO_DIR/airootfs/root/archium-configure.sh"
     ln -sf "archium-setup.sh" "$ISO_DIR/airootfs/root/.automated_script.sh"
     echo "  -> Scripts injected to /root/ and hooked to autostart."
 fi
@@ -181,8 +228,33 @@ fi
 # --- 8. Update permissions in profiledef.sh ---
 echo "🔐 Setting correct file permissions in profiledef.sh..."
 if [ -f "$ISO_DIR/profiledef.sh" ]; then
-    PERM_LINES='  ["/root/archium-setup.sh"]="0:0:755"\n  ["/root/archium-install.sh"]="0:0:755"\n  ["/root/.automated_script.sh"]="0:0:755"\n  ["/opt/archium_repo"]="0:0:755"\n  ["/usr/share/wallpapers/Archium"]="0:0:755"\n  ["/etc/archium-dialogrc"]="0:0:644"'
-    sed -i "/file_permissions=(/,/)/ s|)|$PERM_LINES\n)|" "$ISO_DIR/profiledef.sh"
+    tmp_profile="$(mktemp)"
+
+    awk '
+    BEGIN {
+        inserted=0
+    }
+    {
+        print
+        if ($0 ~ /^[[:space:]]*file_permissions=\([[:space:]]*$/ && inserted==0) {
+            print "  [\"/root/archium-setup.sh\"]=\"0:0:755\""
+            print "  [\"/root/archium-install.sh\"]=\"0:0:755\""
+            print "  [\"/root/archium-configure.sh\"]=\"0:0:755\""
+            print "  [\"/root/.automated_script.sh\"]=\"0:0:755\""
+            print "  [\"/root/.software-menu-pkgs\"]=\"0:0:644\""
+            print "  [\"/opt/archium_repo/\"]=\"0:0:755\""
+            print "  [\"/usr/share/wallpapers/Archium/\"]=\"0:0:755\""
+            print "  [\"/usr/share/icons/hicolor/128x128/apps/archium.png\"]=\"0:0:644\""
+            print "  [\"/usr/share/pixmaps/archium.png\"]=\"0:0:644\""
+            print "  [\"/etc/archium-dialogrc\"]=\"0:0:644\""
+            print "  [\"/etc/fastfetch\"]=\"0:0:755\""
+            print "  [\"/etc/fastfetch/logo.txt\"]=\"0:0:644\""
+            print "  [\"/etc/fastfetch/config.jsonc\"]=\"0:0:644\""
+            inserted=1
+        }
+    }' "$ISO_DIR/profiledef.sh" > "$tmp_profile"
+
+    mv "$tmp_profile" "$ISO_DIR/profiledef.sh"
 fi
 
 # --- 9. Clean up pacnew conflicts ---
@@ -192,7 +264,7 @@ find "$ISO_DIR/airootfs/etc/" -name "*.pacnew" -exec rm -f {} + 2>/dev/null
 echo "📦 Updating ISO package list (packages.x86_64) ..."
 
 PKGS_LIST="$ISO_DIR/packages.x86_64"
-CUSTOM_PKGS_SRC="$PATCH_DIR/packages/pkgs.txt"
+CUSTOM_PKGS_SRC="$PATCH_DIR/packages/iso/pkgs.txt"
 
 if [ -f "$PKGS_LIST" ]; then
     sed -i '/^linux$/d' "$PKGS_LIST"

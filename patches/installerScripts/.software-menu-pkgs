@@ -1,0 +1,54 @@
+SECTION|SYSTEM UTILITIES
+PKG|bluedevil bluez|Enable Bluetooth Support|on
+PKG|print-manager cups system-config-printer|Printing Support (CUPS)|off
+PKG|kamoso|KDE camera aplication|off
+PKG|kdeconnect|KDE Connect (Phone Sync)|off
+PKG|wacomtablet|Wacom Tablet Drivers/GUI|off
+PKG|winboat-bin docker docker-compose|Winboat + Docker Suite|on
+PKG|mkinitcpio-firmware|Silence missing firmware warnings|off
+PKG|filelight|Graphical disk usage viewer|off
+PKG|localsend-bin|Local file sharing|off
+PKG|reflector|Finds fast Arch mirrors|on
+
+SECTION|AMD GPU SPECIFIC TOOLS
+PKG|lact-git|AMD GPU Controller|off
+PKG|radeontop|AMD GPU usage monitor|off
+PKG|amdgpu-fan|AMD fan control daemon|off
+
+SECTION|NVIDIA GPU SPECIFIC TOOLS
+PKG|nvidia_oc|NVIDIA overclock / power control|off
+PKG|nvtop|GPU monitor|off
+
+SECTION|GAMING
+PKG|steam|Steam Client|on
+PKG|protonup-qt-bin|Proton Version Manager|on
+PKG|heroic-games-launcher-bin|Epic/GOG launcher|on
+PKG|minecraft-launcher|Official Minecraft launcher|on
+PKG|prismlauncher|Prism Launcher|off
+PKG|osu-lazer-bin|osu!lazer|off
+PKG|lutris|Game launcher hub|off
+
+SECTION|INTERNET & SOCIAL
+PKG|discord|Discord|off
+PKG|firefox|Firefox|on
+PKG|librewolf|LibreWolf|off
+PKG|waterfox-bin|Waterfox|off
+PKG|brave-bin|Brave|off
+PKG|google-chrome|Google Chrome|off
+PKG|microsoft-edge-stable-bin|Microsoft Edge|off
+PKG|qbittorrent|qBittorrent|off
+
+SECTION|CREATIVE & PRODUCTIVITY
+PKG|obs-studio|OBS Studio|off
+PKG|krita|Krita|off
+PKG|gimp|GIMP|off
+PKG|blender|Blender|off
+PKG|libreoffice-fresh|LibreOffice|off
+PKG|onlyoffice-bin|OnlyOffice|off
+
+SECTION|TOOLS & DESKTOP
+PKG|htop|Process viewer|off
+PKG|piper|Gaming mouse configuration|off
+PKG|plasma-emojier|Emoji selector|off
+PKG|plasma-keyboard|On-screen keyboard|off
+PKG|flatpak discover flatpak-kcm|Flatpak support and Discover store|off

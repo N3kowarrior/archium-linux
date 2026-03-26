@@ -9,7 +9,7 @@
 - [Linux ltg kernel](https://github.com/frogging-family/linux-tkg)
 - Easy TUI installer, based on dialog.
 - Automatic configuration, based on user input.
-- Preinstallation of Paru and Selection of programs (This feature will expand, not it make take while for it to compile).
+- Preinstallation of Paru and Selection of programs. (Some programs are precompiled for faster installation)
 - Custom backgrounds (My own work, very silly).
 ## TODO: 🛠️
 - Write docs
