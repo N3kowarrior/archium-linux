@@ -21,11 +21,9 @@ get_dialog_size() {
     rows=$(tput lines)
     cols=$(tput cols)
 
-    # fallback safety
     [[ -z "$rows" || "$rows" -lt 20 ]] && rows=24
     [[ -z "$cols" || "$cols" -lt 60 ]] && cols=80
 
-    # use ~80% of terminal
     DIALOG_H=$((rows * 80 / 100))
     DIALOG_W=$((cols * 80 / 100))
 
@@ -49,9 +47,11 @@ load_installer_config() {
     : "${GPU_STACK:=generic}"
     : "${ENABLE_FSTRIM:=0}"
     : "${EXTRA_MOUNTS:=}"
+    : "${SWAP_MOUNTPOINT:=}"
+    : "${SWAP_FSTAB_PATH:=}"
     return 0
 }
-trap 'echo "Installer crashed near line $LINENO" | tee /tmp/archium-install-error.log' ERR
+trap 'echo "Installer crashed near line $LINENO while running: $BASH_COMMAND" | tee /tmp/archium-install-error.log' ERR
 
 detect_boot_mode() {
     BOOT_MODE="bios"
@@ -157,11 +157,14 @@ mount_root_filesystem() {
             mount "$root_part" /mnt
             btrfs subvolume create /mnt/@
             btrfs subvolume create /mnt/@home
+            btrfs subvolume create /mnt/@swap
+            sync
             umount /mnt
 
-            mount -o subvol=@ "$root_part" /mnt
-            mkdir -p /mnt/home
-            mount -o subvol=@home "$root_part" /mnt/home
+            mount -o rw,subvol=@ "$root_part" /mnt
+            mkdir -p /mnt/home /mnt/swap
+            mount -o rw,subvol=@home "$root_part" /mnt/home
+            mount -o rw,subvol=@swap "$root_part" /mnt/swap
             ;;
         *)
             echo "Unsupported filesystem: $FS_TYPE"
@@ -198,7 +201,7 @@ sanitize_fstab_for_btrfs() {
 partition_main_drive_uefi() {
     local dev="$1"
 
-    sed -e 's/\s*#.*//' <<EOF | fdisk "$dev"
+    sed -e 's/\s*#.*//' <<EOF2 | fdisk "$dev"
 g
 n
 1
@@ -211,13 +214,13 @@ n
 
 
 w
-EOF
+EOF2
 }
 
 partition_main_drive_bios() {
     local dev="$1"
 
-    sed -e 's/\s*#.*//' <<EOF | fdisk "$dev"
+    sed -e 's/\s*#.*//' <<EOF2 | fdisk "$dev"
 g
 n
 1
@@ -230,7 +233,7 @@ n
 
 
 w
-EOF
+EOF2
 }
 
 device_is_ssd() {
@@ -307,14 +310,14 @@ prepare_extra_drives() {
         partprobe "$dev" >/dev/null 2>&1 || true
         udevadm settle
 
-        sed -e 's/\s*#.*//' <<EOF | fdisk "$dev"
+        sed -e 's/\s*#.*//' <<EOF2 | fdisk "$dev"
 g
 n
 1
 
 
 w
-EOF
+EOF2
 
         partprobe "$dev" >/dev/null 2>&1 || true
         udevadm settle
@@ -326,12 +329,26 @@ EOF
     done <<< "$(printf '%b' "$EXTRA_MOUNTS")"
 }
 
-get_swap_size_mib() {
+get_target_mount_available_mib() {
+    local mountpoint="$1"
+    local available_kib
+    available_kib="$(df -Pk "$mountpoint" 2>/dev/null | awk 'NR==2 {print $4}')"
+    [[ -n "$available_kib" ]] || return 1
+    printf '%d\n' $((available_kib / 1024))
+}
+
+get_desired_swap_size_mib() {
     awk '/MemTotal:/ { printf "%d\n", ($2 + 1023) / 1024 }' /proc/meminfo
 }
 
 choose_swap_mountpoint() {
     local line dev target
+
+    if [[ "$FS_TYPE" == "btrfs" ]]; then
+        SWAP_MOUNTPOINT="/mnt/swap"
+        SWAP_FSTAB_PATH="/swap/.swapfile"
+        return 0
+    fi
 
     if device_is_ssd "$REAL_PATH"; then
         SWAP_MOUNTPOINT="/mnt"
@@ -356,22 +373,52 @@ choose_swap_mountpoint() {
     SWAP_MOUNTPOINT="/mnt"
     SWAP_FSTAB_PATH="/.swapfile"
     return 0
+}
 
+compute_swap_size_mib() {
+    local desired available reserve capped
+
+    desired="$(get_desired_swap_size_mib)"
+    available="$(get_target_mount_available_mib "$SWAP_MOUNTPOINT")"
+
+    reserve=2048
+    if (( available <= reserve + 512 )); then
+        printf '0\n'
+        return 0
+    fi
+
+    capped=$((available - reserve))
+    if (( desired > capped )); then
+        desired=$capped
+    fi
+
+    if (( desired < 512 )); then
+        printf '0\n'
+    else
+        printf '%d\n' "$desired"
+    fi
 }
 
 create_swap_if_needed() {
     local swap_size_mib swap_host_path
 
     choose_swap_mountpoint
-    swap_size_mib="$(get_swap_size_mib)"
-    swap_host_path="${SWAP_MOUNTPOINT}/.swapfile"
-
-    echo "STEP 3c: Creating swap file (${swap_size_mib} MiB) at ${swap_host_path}..."
-
     mkdir -p "$SWAP_MOUNTPOINT"
 
+    swap_size_mib="$(compute_swap_size_mib)"
+    if (( swap_size_mib <= 0 )); then
+        echo "WARNING: Not enough free space for a swap file. Skipping swap creation."
+        SWAP_MOUNTPOINT=""
+        SWAP_FSTAB_PATH=""
+        return 0
+    fi
+
+    swap_host_path="${SWAP_MOUNTPOINT}/.swapfile"
+    echo "STEP 3c: Creating swap file (${swap_size_mib} MiB) at ${swap_host_path}..."
+
     if [[ "$FS_TYPE" == "btrfs" ]]; then
-        btrfs filesystem mkswapfile --size "${swap_size_mib}m" "$swap_host_path"
+        chmod 700 "$SWAP_MOUNTPOINT"
+        btrfs filesystem mkswapfile --size "${swap_size_mib}m" --uuid clear "$swap_host_path"
     else
         fallocate -l "${swap_size_mib}M" "$swap_host_path"
         chmod 600 "$swap_host_path"
@@ -379,8 +426,17 @@ create_swap_if_needed() {
     fi
 }
 
+show_preinstall_space_debug() {
+    echo "=== PRE-INSTALL SPACE STATE ==="
+    df -h /mnt || true
+    if [[ "$FS_TYPE" == "btrfs" ]]; then
+        btrfs filesystem df /mnt || true
+    fi
+}
+
 install_base_system() {
     echo "STEP 4: Installing packages (this takes time)..."
+    show_preinstall_space_debug
 
     pacstrap -K /mnt \
         --noconfirm \
@@ -555,13 +611,13 @@ install_archium_branding() {
     mkdir -p /mnt/etc/fastfetch
     mkdir -p /mnt/etc/skel/.config/fastfetch
 
-    if [[ -f "$live_fastfetch_logo" ]] && [[ -f "$live_fastfetch_cfg" ]]; then
+    if [[ -f "$live_fastfetch_logo" ]]; then
         cp -f "$live_fastfetch_logo" /mnt/etc/fastfetch/logo.txt
-        cp -f "$live_fastfetch_cfg" /mnt/etc/fastfetch/config.jsonc
     elif [[ -f "$repo_fastfetch_ascii" ]]; then
         cp -f "$repo_fastfetch_ascii" /mnt/etc/fastfetch/logo.txt
+    fi
 
-        cat > /mnt/etc/fastfetch/config.jsonc <<'EOF'
+    cat > /mnt/etc/fastfetch/config.jsonc <<'EOF2'
 {
   "logo": {
     "type": "file",
@@ -571,12 +627,9 @@ install_archium_branding() {
     }
   }
 }
-EOF
-    fi
+EOF2
 
-    if [[ -f /mnt/etc/fastfetch/config.jsonc ]]; then
-        cp -f /mnt/etc/fastfetch/config.jsonc /mnt/etc/skel/.config/fastfetch/config.jsonc
-    fi
+    cp -f /mnt/etc/fastfetch/config.jsonc /mnt/etc/skel/.config/fastfetch/config.jsonc
 
     chmod 755 /mnt/etc/fastfetch 2>/dev/null || true
     chmod 644 /mnt/etc/fastfetch/logo.txt 2>/dev/null || true
@@ -585,7 +638,7 @@ EOF
     chmod 755 /mnt/etc/skel/.config/fastfetch 2>/dev/null || true
     chmod 644 /mnt/etc/skel/.config/fastfetch/config.jsonc 2>/dev/null || true
 
-    if [[ -n "$USERNAME" && -d "/mnt/home/$USERNAME" && -f /mnt/etc/fastfetch/config.jsonc ]]; then
+    if [[ -n "$USERNAME" && -d "/mnt/home/$USERNAME" ]]; then
         mkdir -p "/mnt/home/$USERNAME/.config/fastfetch"
         cp -f /mnt/etc/fastfetch/config.jsonc "/mnt/home/$USERNAME/.config/fastfetch/config.jsonc"
         arch-chroot /mnt chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config/fastfetch"
@@ -595,6 +648,7 @@ EOF
     fi
     return 0
 }
+
 prepare_temporary_repo_for_chroot() {
     echo "STEP 7b: Preparing temporary Archium repo for chroot..."
 
@@ -606,12 +660,12 @@ prepare_temporary_repo_for_chroot() {
     mount --bind /etc/resolv.conf /mnt/etc/resolv.conf
 
     if ! grep -q '^\[archium\]$' /mnt/etc/pacman.conf; then
-        cat >> /mnt/etc/pacman.conf <<'EOF'
+        cat >> /mnt/etc/pacman.conf <<'EOF2'
 
 [archium]
 SigLevel = Optional TrustAll
 Server = file:///opt/archium_repo
-EOF
+EOF2
     fi
 
     return 0
@@ -629,8 +683,8 @@ perform_install() {
 
     prepare_main_drive "$REAL_PATH"
     prepare_extra_drives
-    create_swap_if_needed
     install_base_system
+    create_swap_if_needed
     generate_fstab
     append_swap_to_fstab
     write_postinstall_config

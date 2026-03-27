@@ -187,37 +187,40 @@ dns_working() {
 }
 
 ensure_network() {
-    # First test raw connectivity without DNS
-    if network_online; then
-        return 0
-    fi
+    while true; do
+        if network_online; then
+            if ! dns_working; then
+                show_msg " DNS Warning " "Internet seems to work, but DNS lookup for archlinux.org failed.\n\nThe installer will continue, but package downloads may fail until DNS is fixed."
+            fi
+            return 0
+        fi
 
-    local wifi_iface
-    wifi_iface="$(iw dev | awk '$1=="Interface"{print $2; exit}')"
+        local wifi_iface
+        wifi_iface="$(iw dev | awk '$1=="Interface"{print $2; exit}')"
 
-    if ! dialog --clear --backtitle "$TITLE" --title "$NETWORK_TITLE" \
-        --yesno "No internet connection detected.\n\nStart Wi-Fi setup (iwctl)?" 8 50
-    then
-        exit 1
-    fi
+        if ! dialog --clear --backtitle "$TITLE" --title "$NETWORK_TITLE" \
+            --yesno "No internet connection detected.\n\nStart Wi-Fi setup (iwctl)?" 8 50
+        then
+            continue
+        fi
 
-    if [[ -n "$wifi_iface" ]]; then
-        show_msg " Wi-Fi Help " "Inside iwctl, run:\n\nstation $wifi_iface scan\nstation $wifi_iface get-networks\nstation $wifi_iface connect <SSID>\n\nThen exit with Ctrl+D"
-    else
-        show_msg " Wi-Fi Help " "No Wi-Fi interface auto-detected.\n\nOpen iwctl and connect manually.\n\nExit with Ctrl+D when done."
-    fi
+        if [[ -n "$wifi_iface" ]]; then
+            show_msg " Wi-Fi Help " "Inside iwctl, run:\n\nstation $wifi_iface scan\nstation $wifi_iface get-networks\nstation $wifi_iface connect <SSID>\n\nThen exit with Ctrl+D"
+        else
+            show_msg " Wi-Fi Help " "No Wi-Fi interface auto-detected.\n\nOpen iwctl and connect manually.\n\nExit with Ctrl+D when done."
+        fi
 
-    iwctl
+        iwctl || true
 
-    if ! network_online; then
-        show_error "Still no internet connection. Cannot continue."
-        exit 1
-    fi
+        if network_online; then
+            if ! dns_working; then
+                show_msg " DNS Warning " "Internet seems to work, but DNS lookup for archlinux.org failed.\n\nThe installer will continue, but package downloads may fail until DNS is fixed."
+            fi
+            return 0
+        fi
 
-    # Optional DNS warning only
-    if ! dns_working; then
-        show_msg " DNS Warning " "Internet seems to work, but DNS lookup for archlinux.org failed.\n\nThe installer will continue, but package downloads may fail until DNS is fixed."
-    fi
+        show_error "Still no internet connection detected."
+    done
 }
 
 # ---------------------------
@@ -265,133 +268,275 @@ select_keyboard_layouts() {
     local fallback_common=(us cz sk de fr es it pl)
     local keymaps=()
     local keymap
+    local choice
+    local status
 
     if command -v localectl >/dev/null 2>&1 && localectl list-keymaps >/dev/null 2>&1; then
         mapfile -t keymaps < <(localectl list-keymaps | tr -s '[:space:]' '\n' | sed '/^$/d')
     fi
 
-    if [[ ${#keymaps[@]} -eq 0 ]]; then
-        keymaps=("${fallback_common[@]}")
-    fi
+    [[ ${#keymaps[@]} -gt 0 ]] || keymaps=("${fallback_common[@]}")
 
     for keymap in "${keymaps[@]}"; do
         items+=("$keymap" "Console keymap")
     done
 
-    SELECTED_KBL="$(
-        dialog --clear --stdout --backtitle "$TITLE" --title " Keyboard Configuration " \
-            --menu "Select keyboard layout for installer and installed system:" \
-            "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
-            "${items[@]}"
-    )"
+    while true; do
+        if choice="$(
+            dialog --clear --stdout --backtitle "$TITLE" --title " Keyboard Configuration " \
+                --menu "Select keyboard layout for installer and installed system:" \
+                "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
+                "${items[@]}"
+        )"; then
+            status=0
+        else
+            status=$?
+        fi
 
-    if [[ -z "${SELECTED_KBL:-}" ]]; then
-        SELECTED_KBL="us"
-    fi
-
-    apply_live_keyboard_layout "$SELECTED_KBL"
+        case "$status" in
+            0)
+                [[ -n "$choice" ]] || continue
+                SELECTED_KBL="$choice"
+                apply_live_keyboard_layout "$SELECTED_KBL"
+                return 0
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
 }
-
 
 select_timezone() {
     local region_items=()
     local city_items=()
-    local region city
+    local region city status
 
     while read -r region; do
         region_items+=("$region" "Region")
     done < <(timedatectl list-timezones | awk -F/ '{print $1}' | uniq)
 
-    REGION="$(
-        dialog --clear --stdout --backtitle "$TITLE" --title " Timezone " \
-            --menu "Select your Region:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
-            "${region_items[@]}"
-    )"
+    while true; do
+        if REGION="$(
+            dialog --clear --stdout --backtitle "$TITLE" --title " Timezone " \
+                --menu "Select your Region:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
+                "${region_items[@]}"
+        )"; then
+            status=0
+        else
+            status=$?
+        fi
 
-    while read -r city; do
-        city_items+=("$city" "Timezone")
-    done < <(timedatectl list-timezones | awk -F/ -v r="$REGION" '
-        $1 == r {
-            sub("^[^/]*/", "", $0)
-            print
-        }
-    ')
+        case "$status" in
+            0)
+                [[ -n "$REGION" ]] || continue
+                break
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
 
-    CITY="$(
-        dialog --clear --stdout --backtitle "$TITLE" --title " Timezone " \
-            --menu "Select your City / Zone:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
-            "${city_items[@]}"
-    )"
+    while true; do
+        city_items=()
+        while read -r city; do
+            city_items+=("$city" "Timezone")
+        done < <(timedatectl list-timezones | awk -F/ -v r="$REGION" '
+            $1 == r {
+                sub("^[^/]*/", "", $0)
+                print
+            }
+        ')
+
+        if CITY="$(
+            dialog --clear --stdout --backtitle "$TITLE" --title " Timezone " \
+                --menu "Select your City / Zone:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
+                "${city_items[@]}"
+        )"; then
+            status=0
+        else
+            status=$?
+        fi
+
+        case "$status" in
+            0)
+                [[ -n "$CITY" ]] || continue
+                return 0
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
 }
 
 select_locale() {
     local items=()
     local locale
+    local choice
+    local status
 
     while read -r locale _; do
         [[ -n "$locale" ]] && items+=("$locale" "Locale")
     done < <(grep "UTF-8" /etc/locale.gen 2>/dev/null | sed 's/^#//g' || true)
 
-    # fallback pokud by nic nebylo
-    if [[ ${#items[@]} -eq 0 ]]; then
-        items=("en_US.UTF-8" "Fallback locale")
-    fi
+    [[ ${#items[@]} -gt 0 ]] || items=("en_US.UTF-8" "Fallback locale")
 
-    SELECTED_LOCALE="$(
-        dialog --clear --stdout --backtitle "$TITLE" --title " System Locale " \
-            --menu "Choose your primary system language:" \
-            "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
-            "${items[@]}"
-    )"
+    while true; do
+        if choice="$(
+            dialog --clear --stdout --backtitle "$TITLE" --title " System Locale " \
+                --menu "Choose your primary system language:" \
+                "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
+                "${items[@]}"
+        )"; then
+            status=0
+        else
+            status=$?
+        fi
 
-    if [[ -z "${SELECTED_LOCALE:-}" ]]; then
-        SELECTED_LOCALE="en_US.UTF-8"
-    fi
+        case "$status" in
+            0)
+                [[ -n "$choice" ]] || continue
+                SELECTED_LOCALE="$choice"
+                return 0
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
 }
 
 # ---------------------------
 # User / passwords / SYSTEM_HOSTNAME
 # ---------------------------
 collect_user_info() {
-    USERNAME="$(dialog --clear --stdout --backtitle "$TITLE" --title " User Account " --inputbox "Enter Username:" 0 0 "archiumuser")"
-if [[ -z "$USERNAME" ]]; then
-    USERNAME="archiumuser"
-fi
+    local pass2 root_pass2 status
 
     while true; do
-        PASS1="$(dialog --clear --stdout --backtitle "$TITLE" --title " Password " --passwordbox "Enter password for $USERNAME:" 0 0)"
-        local pass2
-        pass2="$(dialog --clear --stdout --backtitle "$TITLE" --title " Password Verification " --passwordbox "Confirm password:" 0 0)"
-
-        if [[ "$PASS1" == "$pass2" && -n "$PASS1" ]]; then
-            break
+        if USERNAME="$(
+            dialog --clear --stdout --backtitle "$TITLE" --title " User Account " \
+                --inputbox "Enter Username:" 0 0 "${USERNAME:-archiumuser}"
+        )"; then
+            status=0
+        else
+            status=$?
         fi
 
-        show_error "Passwords do not match or are empty. Try again."
-    done
+        case "$status" in
+            0)
+                [[ -n "$USERNAME" ]] || USERNAME="archiumuser"
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
 
-    if dialog --clear --backtitle "$TITLE" --title " Root Security " \
-        --yesno "Would you like to set a unique ROOT password?\n\nSelect 'No' to use the user password for root." 8 60
-    then
         while true; do
-            ROOT_PASS1="$(dialog --clear --stdout --backtitle "$TITLE" --title " ROOT Password " --passwordbox "Enter a strong ROOT password:" 0 0)"
-            local root_pass2
-            root_pass2="$(dialog --clear --stdout --backtitle "$TITLE" --title " ROOT Verification " --passwordbox "Confirm ROOT password:" 0 0)"
+            if PASS1="$(
+                dialog --clear --stdout --backtitle "$TITLE" --title " Password " \
+                    --passwordbox "Enter password for $USERNAME:" 0 0
+            )"; then
+                status=0
+            else
+                status=$?
+            fi
+            [[ "$status" -eq 0 ]] || continue
 
-            if [[ "$ROOT_PASS1" == "$root_pass2" && -n "$ROOT_PASS1" ]]; then
+            if pass2="$(
+                dialog --clear --stdout --backtitle "$TITLE" --title " Password Verification " \
+                    --passwordbox "Confirm password:" 0 0
+            )"; then
+                status=0
+            else
+                status=$?
+            fi
+            [[ "$status" -eq 0 ]] || continue
+
+            if [[ "$PASS1" == "$pass2" && -n "$PASS1" ]]; then
                 break
             fi
 
-            show_error "Passwords do not match or are empty."
+            show_error "Passwords do not match or are empty. Try again."
         done
-    else
-        ROOT_PASS1="$PASS1"
-    fi
 
-    SYSTEM_HOSTNAME="$(dialog --clear --stdout --backtitle "$TITLE" --title " Hostname " --inputbox "Enter Computer Name:" 0 0 "archium")"
-    if [[ -z "$SYSTEM_HOSTNAME" ]]; then
-        SYSTEM_HOSTNAME="archium"
-    fi
+        while true; do
+            if dialog --clear --backtitle "$TITLE" --title " Root Security " \
+                --yesno "Would you like to set a unique ROOT password?\n\nSelect 'No' to use the user password for root." 8 60
+            then
+                while true; do
+                    if ROOT_PASS1="$(
+                        dialog --clear --stdout --backtitle "$TITLE" --title " ROOT Password " \
+                            --passwordbox "Enter a strong ROOT password:" 0 0
+                    )"; then
+                        status=0
+                    else
+                        status=$?
+                    fi
+                    [[ "$status" -eq 0 ]] || continue
+
+                    if root_pass2="$(
+                        dialog --clear --stdout --backtitle "$TITLE" --title " ROOT Verification " \
+                            --passwordbox "Confirm ROOT password:" 0 0
+                    )"; then
+                        status=0
+                    else
+                        status=$?
+                    fi
+                    [[ "$status" -eq 0 ]] || continue
+
+                    if [[ "$ROOT_PASS1" == "$root_pass2" && -n "$ROOT_PASS1" ]]; then
+                        break 2
+                    fi
+
+                    show_error "Passwords do not match or are empty."
+                done
+            else
+                ROOT_PASS1="$PASS1"
+                break
+            fi
+        done
+
+        while true; do
+            if SYSTEM_HOSTNAME="$(
+                dialog --clear --stdout --backtitle "$TITLE" --title " Hostname " \
+                    --inputbox "Enter Computer Name:" 0 0 "${SYSTEM_HOSTNAME:-archium}"
+            )"; then
+                status=0
+            else
+                status=$?
+            fi
+
+            case "$status" in
+                0)
+                    [[ -n "$SYSTEM_HOSTNAME" ]] || SYSTEM_HOSTNAME="archium"
+                    return 0
+                    ;;
+                1|255)
+                    continue
+                    ;;
+                *)
+                    continue
+                    ;;
+            esac
+        done
+    done
 }
 
 show_cpu_info() {
@@ -405,6 +550,8 @@ collect_selected_drives() {
     local drive_lines=()
     local menu_items=()
     local boot_src="" boot_disk=""
+    local drive_list
+    local status
 
     boot_src="$(findmnt -nro SOURCE /run/archiso/bootmnt 2>/dev/null || true)"
     if [[ -n "$boot_src" ]]; then
@@ -450,20 +597,32 @@ collect_selected_drives() {
     done
 
     while true; do
-        local drive_list
-        drive_list="$(
+        if drive_list="$(
             dialog --clear --stdout --backtitle "$TITLE" --title " Drive Selection " \
                 --checklist "Space to select ALL drives you want to use:" 15 70 8 \
                 "${menu_items[@]}"
-        )" || return 1
-
-        if [[ -z "$drive_list" ]]; then
-            show_error "You must select at least one drive to continue."
-            continue
+        )"; then
+            status=0
+        else
+            status=$?
         fi
 
-        readarray -t SELECTED_PATHS < <(tr -d '"' <<< "$drive_list" | xargs -n1)
-        return 0
+        case "$status" in
+            0)
+                if [[ -z "$drive_list" ]]; then
+                    show_error "You must select at least one drive to continue."
+                    continue
+                fi
+                readarray -t SELECTED_PATHS < <(tr -d '"' <<< "$drive_list" | xargs -n1)
+                return 0
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
     done
 }
 
@@ -570,18 +729,36 @@ build_drive_layout() {
 # Filesystem / packages
 # ---------------------------
 select_filesystem() {
-    FS_TYPE="$(
-        dialog --clear --stdout --backtitle "$TITLE" --title " Filesystem Selection " \
-            --menu "Select the filesystem for all formatted Linux drives:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
-            "ext4"  "Stable default" \
-            "btrfs" "Modern copy-on-write filesystem"
-    )"
+    local choice
+    local status
 
-    if [[ -z "${FS_TYPE:-}" ]]; then
-        FS_TYPE="ext4"
-    fi
+    while true; do
+        if choice="$(
+            dialog --clear --stdout --backtitle "$TITLE" --title " Filesystem Selection " \
+                --menu "Select the filesystem for all formatted Linux drives:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
+                "ext4"  "Stable default" \
+                "btrfs" "Modern copy-on-write filesystem"
+        )"; then
+            status=0
+        else
+            status=$?
+        fi
+
+        case "$status" in
+            0)
+                [[ -n "$choice" ]] || continue
+                FS_TYPE="$choice"
+                return 0
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
 }
-
 build_software_menu_items() {
     local file="$SCRIPT_DIR/.software-menu-pkgs"
     local items=()
@@ -612,25 +789,40 @@ select_optional_software() {
     local soft_list=()
     local selected_extras
     local core_pkgs core_syspkgs apps_pkgs
+    local status
 
     mapfile -t soft_list < <(build_software_menu_items) || return 1
 
-    selected_extras="$(
-        dialog --clear --stdout --separate-output --backtitle "$TITLE" --title " Package Selection " \
-            --checklist "Select the software loadout for Archium:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
-            "${soft_list[@]}"
-    )"
+    while true; do
+        selected_extras="$(
+            dialog --clear --stdout --separate-output --backtitle "$TITLE" --title " Package Selection " \
+                --checklist "Select the software loadout for Archium:" "$MENU_H" "$MENU_W" "$MENU_LIST_H" \
+                "${soft_list[@]}"
+        )"
+        status=$?
 
-    core_pkgs="base base-devel git sof-firmware linux-firmware $UCODE $VIDEO_PKGS efibootmgr sddm grub sudo dosfstools lsb-release noto-fonts iptables-nft"
-    if [[ "$FS_TYPE" == "btrfs" ]]; then
-        core_pkgs="$core_pkgs btrfs-progs"
-    fi
+        case "$status" in
+            0)
+                core_pkgs="base base-devel git sof-firmware linux-firmware $UCODE $VIDEO_PKGS efibootmgr sddm grub sudo dosfstools lsb-release noto-fonts iptables-nft"
+                if [[ "$FS_TYPE" == "btrfs" ]]; then
+                    core_pkgs="$core_pkgs btrfs-progs"
+                fi
 
-    core_syspkgs="plasma-desktop zip unzip p7zip tar unrar plasma-pa plasma-nm ntfs-3g vlc-plugins-all sddm-kcm pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-pulse os-prober nano plasma5-integration kde-gtk-config breeze-gtk ffmpegthumbs kdegraphics-thumbnailers powerdevil power-profiles-daemon phonon-qt6-vlc xdg-user-dirs ufw qt6-multimedia-ffmpeg mkinitcpio e2fsprogs colord-kde kscreen kgamma lib32-pipewire-jack lib32-pipewire-v4l2 libappindicator"
-    apps_pkgs="kate elisa konsole fastfetch kcalc spectacle ark kinfocenter plasma-systemmonitor vlc dolphin gwenview kolourpaint okular"
+                core_syspkgs="plasma-desktop zip unzip p7zip tar unrar plasma-pa plasma-nm ntfs-3g vlc-plugins-all sddm-kcm pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-pulse os-prober nano plasma5-integration kde-gtk-config breeze-gtk ffmpegthumbs kdegraphics-thumbnailers powerdevil power-profiles-daemon phonon-qt6-vlc xdg-user-dirs ufw qt6-multimedia-ffmpeg mkinitcpio e2fsprogs colord-kde kscreen kgamma lib32-pipewire-jack lib32-pipewire-v4l2 libappindicator"
+                apps_pkgs="kate elisa konsole fastfetch kcalc spectacle ark kinfocenter plasma-systemmonitor vlc dolphin gwenview kolourpaint okular"
 
-    ARCH_PACKAGE_LIST="$core_pkgs $core_syspkgs $apps_pkgs"
-    AUR_PACKAGE_LIST="$(printf '%s\n' "$selected_extras" | grep -v '^---$' | paste -sd' ' -)"
+                ARCH_PACKAGE_LIST="$core_pkgs $core_syspkgs $apps_pkgs"
+                AUR_PACKAGE_LIST="$(printf '%s\n' "$selected_extras" | grep -v '^---$' | paste -sd' ' -)"
+                return 0
+                ;;
+            1|255)
+                continue
+                ;;
+            *)
+                continue
+                ;;
+        esac
+    done
 }
 
 # ---------------------------
@@ -887,22 +1079,23 @@ main() {
     get_dialog_size
     detect_cpu_vendor
     show_welcome
+
     ensure_network
     select_locale
     select_timezone
     select_keyboard_layouts
     collect_user_info
-    detect_ucode_package
-    show_cpu_info || true
-    detect_gpu_and_packages
 
     while true; do
-        collect_selected_drives || continue
-        split_and_sort_drives || continue
-        build_drive_layout || continue
+        collect_selected_drives
+        split_and_sort_drives || { show_error "Drive sorting failed."; continue; }
+        build_drive_layout || { show_error "Drive layout generation failed."; continue; }
         break
     done
 
+    detect_ucode_package
+    show_cpu_info || true
+    detect_gpu_and_packages
     select_filesystem
     select_optional_software
     confirm_and_continue
