@@ -840,7 +840,7 @@ select_optional_software() {
                     core_pkgs="$core_pkgs btrfs-progs"
                 fi
 
-                core_syspkgs="plasma-desktop zip unzip p7zip tar unrar plasma-pa plasma-nm ntfs-3g vlc-plugins-all sddm-kcm pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-pulse os-prober nano plasma5-integration kde-gtk-config breeze-gtk ffmpegthumbs kdegraphics-thumbnailers powerdevil power-profiles-daemon phonon-qt6-vlc xdg-user-dirs ufw qt6-multimedia-ffmpeg mkinitcpio e2fsprogs colord-kde kscreen kgamma lib32-pipewire-jack lib32-pipewire-v4l2 libappindicator papirus-icon-theme"
+                core_syspkgs="plasma-desktop zip unzip p7zip tar unrar plasma-pa plasma-nm ntfs-3g vlc-plugins-all sddm-kcm pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-pulse os-prober nano plasma5-integration kde-gtk-config breeze-gtk ffmpegthumbs kdegraphics-thumbnailers powerdevil power-profiles-daemon phonon-qt6-vlc xdg-user-dirs xdg-utils ufw qt6-multimedia-ffmpeg mkinitcpio e2fsprogs colord-kde kscreen kgamma lib32-pipewire-jack lib32-pipewire-v4l2 libappindicator papirus-icon-theme"
                 apps_pkgs="kate elisa konsole fastfetch kcalc spectacle ark kinfocenter plasma-systemmonitor vlc dolphin gwenview kolourpaint okular"
 
                 ARCH_PACKAGE_LIST="$core_pkgs $core_syspkgs $apps_pkgs"

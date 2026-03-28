@@ -9,6 +9,7 @@ PKG|mkinitcpio-firmware|Silence missing firmware warnings|off
 PKG|filelight|Graphical disk usage viewer|off
 PKG|localsend-bin|Local file sharing|off
 PKG|reflector|Finds fast Arch mirrors|on
+PKG|filelight|Finds fast Arch mirrors|on
 
 SECTION|AMD GPU SPECIFIC TOOLS
 PKG|lact-git|AMD GPU Controller|off
@@ -27,6 +28,10 @@ PKG|minecraft-launcher|Official Minecraft launcher|on
 PKG|prismlauncher|Prism Launcher|off
 PKG|osu-lazer-bin|osu!lazer|off
 PKG|lutris|Game launcher hub|off
+
+SECTION|GAMING (ADVANCED)
+PKG|gamemode lib32-gamemode|Game performance tweaks|off
+PKG|mangohud lib32-mangohud|FPS overlay|off
 
 SECTION|INTERNET & SOCIAL
 PKG|discord|Discord|off

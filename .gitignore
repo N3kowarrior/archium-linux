@@ -5,6 +5,8 @@ archium-repo-aur
 aur-build
 linux-tkg
 archium-linux-iso
+patches/theme/KDE/monochrome-kde
+patches/theme/KDE/papirus-icon-theme
 /tmp/
 .cache/
 *.log
