@@ -60,7 +60,15 @@ GPU_STACK="generic"
 # ---------------------------
 # UI helpers
 # ---------------------------
-
+safe_exit() {
+    clear
+    echo "Installer exited before any changes were made."
+    exit 0
+}
+confirm_exit() {
+    dialog --clear --backtitle "$TITLE" --title " Exit Installer " \
+        --yesno "Exit the installer now?\n\nNo changes have been made yet." 8 60
+}
 get_dialog_size() {
     local rows cols
 
@@ -301,7 +309,11 @@ select_keyboard_layouts() {
                 return 0
                 ;;
             1|255)
-                continue
+                if confirm_exit; then
+                    safe_exit
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue
@@ -336,7 +348,11 @@ select_timezone() {
                 break
                 ;;
             1|255)
-                continue
+                if confirm_exit; then
+                    safe_exit
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue
@@ -371,7 +387,11 @@ select_timezone() {
                 return 0
                 ;;
             1|255)
-                continue
+                if confirm_exit; then
+                    safe_exit
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue
@@ -411,7 +431,11 @@ select_locale() {
                 return 0
                 ;;
             1|255)
-                continue
+                if confirm_exit; then
+                    safe_exit
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue
@@ -441,7 +465,11 @@ collect_user_info() {
                 [[ -n "$USERNAME" ]] || USERNAME="archiumuser"
                 ;;
             1|255)
-                continue
+                if confirm_exit; then
+                    safe_exit
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue
@@ -529,7 +557,11 @@ collect_user_info() {
                     return 0
                     ;;
                 1|255)
-                    continue
+                    if confirm_exit; then
+                        safe_exit
+                    else
+                        continue
+                    fi
                     ;;
                 *)
                     continue
@@ -575,7 +607,7 @@ collect_selected_drives() {
 
         [[ "$type" == "disk" ]] || continue
         [[ "$ro" == "0" ]] || continue
-        [[ "$dev" == /dev/loop* || "$dev" == /dev/zram* || "$dev" == /dev/ram* ]] && continue
+        [[ "$dev" == /dev/loop* || "$dev" == /dev/zram* || "$dev" == /dev/ram* || "$dev" == /dev/sr* ]] && continue
         [[ -n "$boot_disk" && "$dev" == "$boot_disk" ]] && continue
 
         size="$(printf '%s' "$size" | tr -d '[:space:]')"
@@ -617,7 +649,11 @@ collect_selected_drives() {
                 return 0
                 ;;
             1|255)
-                continue
+                if confirm_exit; then
+                    safe_exit
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue
@@ -649,11 +685,11 @@ split_and_sort_drives() {
     done
 
     if [[ ${#ssd_rows[@]} -gt 0 ]]; then
-        mapfile -t SORTED_SSDS < <(printf '%s\n' "${ssd_rows[@]}" | sort -nr | awk '{print $2}')
+        mapfile -t SORTED_SSDS < <(printf '%s\n' "${ssd_rows[@]}" | sort -n | awk '{print $2}')
     fi
 
     if [[ ${#hdd_rows[@]} -gt 0 ]]; then
-        mapfile -t SORTED_HDDS < <(printf '%s\n' "${hdd_rows[@]}" | sort -nr | awk '{print $2}')
+        mapfile -t SORTED_HDDS < <(printf '%s\n' "${hdd_rows[@]}" | sort -n | awk '{print $2}')
     fi
 
     if [[ ${#SORTED_SSDS[@]} -eq 0 && ${#SORTED_HDDS[@]} -eq 0 ]]; then
@@ -665,64 +701,60 @@ split_and_sort_drives() {
 build_drive_layout() {
     EXTRA_MOUNTS=""
 
+    local root_pool=()
+    local extra_pool=()
+
     if [[ ${#SORTED_SSDS[@]} -gt 0 ]]; then
-        REAL_PATH="${SORTED_SSDS[0]}"
-
-        if [[ ${#SORTED_SSDS[@]} -gt 1 ]]; then
-            EXTRA_MOUNTS+="${SORTED_SSDS[1]}:/home\n"
-        fi
-
-        if [[ ${#SORTED_HDDS[@]} -gt 0 ]]; then
-            local hdd_index
-            for hdd_index in "${!SORTED_HDDS[@]}"; do
-                local hdd model size
-                hdd="${SORTED_HDDS[$hdd_index]}"
-
-                model="$(lsblk -dn -o MODEL "$hdd" | tr -dc '[:alnum:]')"
-                size="$(LANG=C lsblk -dn -o SIZE "$hdd" | tr -d '[:space:],')"
-
-                [[ -n "$model" ]] || model="Disk"
-                [[ -n "$size" ]] || size="Unknown"
-
-                EXTRA_MOUNTS+="$hdd:/${model}_${size}\n"
-            done
-        fi
-
-        if [[ ${#SORTED_SSDS[@]} -gt 2 ]]; then
-            local i
-            for ((i=2; i<${#SORTED_SSDS[@]}; i++)); do
-                local ssd size
-                ssd="${SORTED_SSDS[$i]}"
-                size="$(LANG=C lsblk -dn -o SIZE "$ssd" | tr -d '[:space:],')"
-
-                [[ -n "$size" ]] || size="Unknown"
-
-                EXTRA_MOUNTS+="$ssd:/SSD_${size}\n"
-            done
-        fi
+        root_pool=("${SORTED_SSDS[@]}")
+        extra_pool=("${SORTED_HDDS[@]}")
     else
-        REAL_PATH="${SORTED_HDDS[0]}"
-
-        if [[ ${#SORTED_HDDS[@]} -gt 1 ]]; then
-            EXTRA_MOUNTS+="${SORTED_HDDS[1]}:/home\n"
-        fi
-
-        if [[ ${#SORTED_HDDS[@]} -gt 2 ]]; then
-            local i
-            for ((i=2; i<${#SORTED_HDDS[@]}; i++)); do
-                local hdd model size
-                hdd="${SORTED_HDDS[$i]}"
-
-                model="$(lsblk -dn -o MODEL "$hdd" | tr -dc '[:alnum:]')"
-                size="$(LANG=C lsblk -dn -o SIZE "$hdd" | tr -d '[:space:],')"
-
-                [[ -n "$model" ]] || model="Disk"
-                [[ -n "$size" ]] || size="Unknown"
-
-                EXTRA_MOUNTS+="$hdd:/${model}_${size}\n"
-            done
-        fi
+        root_pool=("${SORTED_HDDS[@]}")
+        extra_pool=()
     fi
+
+    [[ ${#root_pool[@]} -gt 0 ]] || return 1
+
+    REAL_PATH="${root_pool[0]}"
+
+    # Separate /home only if at least 2 drives exist in the chosen root pool
+    if [[ ${#root_pool[@]} -gt 1 ]]; then
+        EXTRA_MOUNTS+="${root_pool[1]}:/home\n"
+    fi
+
+    # Remaining drives from the chosen root pool become extra mounts
+    local i dev model size mount_name
+    for ((i=2; i<${#root_pool[@]}; i++)); do
+        dev="${root_pool[$i]}"
+        size="$(LANG=C lsblk -dn -o SIZE "$dev" | tr -d '[:space:],')"
+        [[ -n "$size" ]] || size="Unknown"
+
+        if device_is_ssd "$dev"; then
+            mount_name="SSD_${size}"
+        else
+            model="$(lsblk -dn -o MODEL "$dev" | tr -dc '[:alnum:]')"
+            [[ -n "$model" ]] || model="Disk"
+            mount_name="${model}_${size}"
+        fi
+
+        EXTRA_MOUNTS+="$dev:/mnt/${mount_name}\n"
+    done
+
+    # All drives from the other pool become extra mounts
+    for dev in "${extra_pool[@]}"; do
+        model="$(lsblk -dn -o MODEL "$dev" | tr -dc '[:alnum:]')"
+        size="$(LANG=C lsblk -dn -o SIZE "$dev" | tr -d '[:space:],')"
+
+        [[ -n "$model" ]] || model="Disk"
+        [[ -n "$size" ]] || size="Unknown"
+
+        if device_is_ssd "$dev"; then
+            mount_name="SSD_${size}"
+        else
+            mount_name="${model}_${size}"
+        fi
+
+        EXTRA_MOUNTS+="$dev:/mnt/${mount_name}\n"
+    done
 }
 
 # ---------------------------
@@ -808,7 +840,7 @@ select_optional_software() {
                     core_pkgs="$core_pkgs btrfs-progs"
                 fi
 
-                core_syspkgs="plasma-desktop zip unzip p7zip tar unrar plasma-pa plasma-nm ntfs-3g vlc-plugins-all sddm-kcm pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-pulse os-prober nano plasma5-integration kde-gtk-config breeze-gtk ffmpegthumbs kdegraphics-thumbnailers powerdevil power-profiles-daemon phonon-qt6-vlc xdg-user-dirs ufw qt6-multimedia-ffmpeg mkinitcpio e2fsprogs colord-kde kscreen kgamma lib32-pipewire-jack lib32-pipewire-v4l2 libappindicator"
+                core_syspkgs="plasma-desktop zip unzip p7zip tar unrar plasma-pa plasma-nm ntfs-3g vlc-plugins-all sddm-kcm pipewire pipewire-alsa pipewire-audio pipewire-jack pipewire-pulse os-prober nano plasma5-integration kde-gtk-config breeze-gtk ffmpegthumbs kdegraphics-thumbnailers powerdevil power-profiles-daemon phonon-qt6-vlc xdg-user-dirs ufw qt6-multimedia-ffmpeg mkinitcpio e2fsprogs colord-kde kscreen kgamma lib32-pipewire-jack lib32-pipewire-v4l2 libappindicator papirus-icon-theme"
                 apps_pkgs="kate elisa konsole fastfetch kcalc spectacle ark kinfocenter plasma-systemmonitor vlc dolphin gwenview kolourpaint okular"
 
                 ARCH_PACKAGE_LIST="$core_pkgs $core_syspkgs $apps_pkgs"
@@ -816,7 +848,11 @@ select_optional_software() {
                 return 0
                 ;;
             1|255)
-                continue
+                if confirm_exit; then
+                    safe_exit
+                else
+                    continue
+                fi
                 ;;
             *)
                 continue

@@ -27,6 +27,13 @@ configure_identity() {
     echo "LANG=$SELECTED_LOCALE" > /etc/locale.conf
 }
 
+configure_sudo() {
+    mkdir -p /etc/sudoers.d
+    cat > /etc/sudoers.d/00-wheel <<'EOF'
+%wheel ALL=(ALL:ALL) ALL
+EOF
+    chmod 440 /etc/sudoers.d/00-wheel
+}
 
 configure_users() {
     id -u "$USERNAME" >/dev/null 2>&1 || useradd -m -G wheel "$USERNAME"
@@ -266,13 +273,25 @@ configure_gpu_stack() {
 
 configure_system_defaults() {
     echo "vm.swappiness = 10" > /etc/sysctl.d/99-swappiness.conf
+    cat > /etc/sysctl.d/80-gamecompatibility.conf <<'EOF'
+vm.max_map_count = 2147483642
+EOF
     sed -i "s/^#MAKEFLAGS.*/MAKEFLAGS=\"-j\$(nproc)\"/" /etc/makepkg.conf || true
 }
 
 configure_steam_tweak() {
-    install -d -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.steam/steam"
-    printf 'unShaderBackgroundProcessingThreads %s\n' "$(nproc)" > "/home/$USERNAME/.steam/steam/steam_dev.cfg"
-    chown "$USERNAME:$USERNAME" "/home/$USERNAME/.steam/steam/steam_dev.cfg"
+    #install -d -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.steam"
+    #install -d -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.steam/steam"
+    #install -d -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local"
+    #install -d -o "$USERNAME" -g "$USERNAME" "/home/$USERNAME/.local/share"
+
+    #printf 'unShaderBackgroundProcessingThreads %s\n' "$(nproc)" > "/home/$USERNAME/.steam/steam/steam_dev.cfg"
+    #chown "$USERNAME:$USERNAME" "/home/$USERNAME/.steam/steam/steam_dev.cfg"
+    return 0
+}
+
+fix_user_home_ownership() {
+    chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config" "/home/$USERNAME/.local" "/home/$USERNAME/.steam" 2>/dev/null || true
 }
 
 configure_initramfs() {
@@ -481,7 +500,7 @@ configure_package_related_services() {
 
     if echo "$aur_list" | grep -qw "piper"; then
         pacman -S --noconfirm --needed libratbag
-        systemctl enable libratbag.service
+        systemctl enable ratbagd.service
     fi
 
     if echo "$aur_list" | grep -qE '(^|[[:space:]])(lact|lact-git)($|[[:space:]])'; then
@@ -588,23 +607,179 @@ prefer_ipv4_over_ipv6() {
     fi
 }
 
+configure_archium_kde_theme() {
+    local user_home="/home/$USERNAME"
+
+    [[ -n "${USERNAME:-}" ]] || return 0
+    [[ -d "$user_home" ]] || return 0
+
+    install -d -o "$USERNAME" -g "$USERNAME" "$user_home/.config"
+    install -d -o "$USERNAME" -g "$USERNAME" "$user_home/.config/gtk-3.0"
+    install -d -o "$USERNAME" -g "$USERNAME" "$user_home/.config/gtk-4.0"
+
+    install -d -o "$USERNAME" -g "$USERNAME" "$user_home/.local"
+    install -d -o "$USERNAME" -g "$USERNAME" "$user_home/.local/share"
+    install -d -o "$USERNAME" -g "$USERNAME" "$user_home/.local/share/konsole"
+
+    # KDE globals
+    cat > "$user_home/.config/kdeglobals" <<'EOF'
+[General]
+ColorScheme=Monochrome
+Name=Archium
+XftHintStyle=hintslight
+XftSubPixel=none
+
+[Icons]
+Theme=Papirus-Dark
+
+[KDE]
+widgetStyle=Breeze
+
+[UiSettings]
+ColorScheme=Monochrome
+
+[Gtk]
+gtk-theme-name=Monochrome
+icon-theme-name=Papirus-Dark
+cursor-theme-name=breeze_cursors
+EOF
+
+    # Plasma theme
+    cat > "$user_home/.config/plasmarc" <<'EOF'
+[Theme]
+name=Monochrome
+EOF
+
+    # KWin decoration
+    cat > "$user_home/.config/kwinrc" <<'EOF'
+[org.kde.kdecoration2]
+theme=MonochromeBlur
+EOF
+
+    # Cursor
+    cat > "$user_home/.config/kcminputrc" <<'EOF'
+[Mouse]
+cursorTheme=breeze_cursors
+cursorSize=24
+EOF
+
+    # GTK 3
+    cat > "$user_home/.config/gtk-3.0/settings.ini" <<'EOF'
+[Settings]
+gtk-theme-name=Monochrome
+gtk-icon-theme-name=Papirus-Dark
+gtk-cursor-theme-name=breeze_cursors
+gtk-application-prefer-dark-theme=true
+EOF
+
+    # GTK 4
+    cat > "$user_home/.config/gtk-4.0/settings.ini" <<'EOF'
+[Settings]
+gtk-theme-name=Monochrome
+gtk-icon-theme-name=Papirus-Dark
+gtk-cursor-theme-name=breeze_cursors
+gtk-application-prefer-dark-theme=true
+EOF
+
+    # GTK 2
+    cat > "$user_home/.gtkrc-2.0" <<'EOF'
+gtk-theme-name="Monochrome"
+gtk-icon-theme-name="Papirus-Dark"
+gtk-cursor-theme-name="breeze_cursors"
+EOF
+
+    # Konsole default profile + theme
+    cat > "$user_home/.local/share/konsole/Archium.profile" <<'EOF'
+[Appearance]
+ColorScheme=Monochrome
+
+[General]
+Name=Archium
+Parent=FALLBACK/
+EOF
+
+    cat > "$user_home/.config/konsolerc" <<'EOF'
+[Desktop Entry]
+DefaultProfile=Archium.profile
+EOF
+
+    chown -R "$USERNAME:$USERNAME" \
+        "$user_home/.config/kdeglobals" \
+        "$user_home/.config/plasmarc" \
+        "$user_home/.config/kwinrc" \
+        "$user_home/.config/kcminputrc" \
+        "$user_home/.config/gtk-3.0" \
+        "$user_home/.config/gtk-4.0" \
+        "$user_home/.gtkrc-2.0" \
+        "$user_home/.local/share/konsole" \
+        "$user_home/.config/konsolerc"
+}
+
+configure_extra_mount_ownership() {
+    local line dev target
+
+    [[ -n "${EXTRA_MOUNTS:-}" ]] || return 0
+    id -u "$USERNAME" >/dev/null 2>&1 || return 0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" ]] && continue
+
+        dev="${line%%:*}"
+        target="${line#*:}"
+
+        [[ "$target" == "/home" ]] && continue
+        [[ -d "$target" ]] || continue
+
+        chown -R "$USERNAME:$USERNAME" "$target" || true
+    done <<< "$(printf '%b' "$EXTRA_MOUNTS")"
+}
+
+configure_grub_os_prober() {
+    echo "Enabling os-prober in GRUB..."
+
+    if grep -q "^GRUB_DISABLE_OS_PROBER=" /etc/default/grub 2>/dev/null; then
+        sed -i 's/^GRUB_DISABLE_OS_PROBER=.*/GRUB_DISABLE_OS_PROBER=false/' /etc/default/grub
+    else
+        echo "GRUB_DISABLE_OS_PROBER=false" >> /etc/default/grub
+    fi
+}
+
+configure_archium_repo() {
+    cleanup_temporary_repo_config
+
+    if ! grep -q '^\[archium\]$' /etc/pacman.conf; then
+        cat >> /etc/pacman.conf <<'EOF'
+
+[archium]
+SigLevel = Optional TrustAll
+Server = https://github.com/N3kowarrior/archium-repo/releases/download/stable
+EOF
+    fi
+}
+
 main() {
     prefer_ipv4_over_ipv6
     enable_multilib_and_pacman_tweaks
     configure_identity
     configure_users
+    configure_extra_mount_ownership
     configure_keyboard
     configure_plasma_locale_and_keyboard
     configure_system_defaults
     configure_journald_limits
     configure_steam_tweak
     install_repo_and_aur_packages
+    configure_archium_repo
+    configure_sudo
+    configure_archium_kde_theme
+    fix_user_home_ownership
     configure_gpu_stack
     if ! configure_hibernate_for_swapfile; then
     echo "WARNING: Hibernate could not be configured automatically."
     fi
     configure_initramfs
     configure_package_related_services
+    configure_grub_os_prober
     configure_bootloader
     enable_base_services
     write_identity_files

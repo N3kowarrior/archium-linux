@@ -10,4 +10,6 @@ echo "4) Patching installer files ..."
 ./patchArchInstaller.sh
 echo "5) Making the final ISO ..."
 ./buildImage.sh
+echo "6) Uploading the built packages to repo..."
+./publishGithubRepo.sh
 echo "✅ All steps completed successfully!"

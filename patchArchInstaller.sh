@@ -60,37 +60,101 @@ if [ -d "$PATCH_DIR/theme" ]; then
     else
         echo "⚠️ Logo not found at $LOGO_SRC"
     fi
-
     # Fastfetch
     FASTFETCH_ASCII_SRC="$PATCH_DIR/theme/fastfetch-archium-ascii.txt"
+    FASTFETCH_CONFIG_SRC="$PATCH_DIR/theme/config.jsonc"
+
     FASTFETCH_DIR="$ISO_DIR/airootfs/etc/fastfetch"
     FASTFETCH_CFG_DEST="$FASTFETCH_DIR/config.jsonc"
     FASTFETCH_LOGO_DEST="$FASTFETCH_DIR/logo.txt"
-    FASTFETCH_SKEL_DEST="$ISO_DIR/airootfs/etc/skel/.config/fastfetch/config.jsonc"
+    FASTFETCH_SKEL_DIR="$ISO_DIR/airootfs/etc/skel/.config/fastfetch"
+    FASTFETCH_SKEL_DEST="$FASTFETCH_SKEL_DIR/config.jsonc"
 
     mkdir -p "$FASTFETCH_DIR"
-    mkdir -p "$(dirname "$FASTFETCH_SKEL_DEST")"
+    mkdir -p "$FASTFETCH_SKEL_DIR"
 
     if [ -f "$FASTFETCH_ASCII_SRC" ]; then
         cp "$FASTFETCH_ASCII_SRC" "$FASTFETCH_LOGO_DEST"
-
-        cat > "$FASTFETCH_CFG_DEST" <<'EOF'
-{
-  "logo": {
-    "type": "file",
-    "source": "/etc/fastfetch/logo.txt",
-    "color": {
-      "1": "white"
-    }
-  }
-}
-EOF
-
-        cp "$FASTFETCH_CFG_DEST" "$FASTFETCH_SKEL_DEST"
-        echo "✅ Fastfetch branding injected successfully."
     else
         echo "⚠️ Fastfetch ASCII art not found at $FASTFETCH_ASCII_SRC"
     fi
+
+    if [ -f "$FASTFETCH_CONFIG_SRC" ]; then
+        cp "$FASTFETCH_CONFIG_SRC" "$FASTFETCH_CFG_DEST"
+        cp "$FASTFETCH_CONFIG_SRC" "$FASTFETCH_SKEL_DEST"
+        echo "✅ Fastfetch branding injected successfully."
+    else
+        echo "⚠️ Fastfetch config not found at $FASTFETCH_CONFIG_SRC"
+    fi
+fi
+
+echo "🎨 Injecting KDE theme assets into live ISO..."
+if [ -d "$PATCH_DIR/theme" ]; then
+    kde_src="$PATCH_DIR/theme/KDE/monochrome-kde"
+
+    [[ -d "$kde_src" ]] || {
+        echo "⚠️ KDE theme repo not found at $kde_src"
+        return 0
+    }
+
+    # Plasma desktop theme
+    if [[ -d "$kde_src/plasma/desktoptheme/Monochrome" ]]; then
+        mkdir -p "$ISO_DIR/airootfs/usr/share/plasma/desktoptheme"
+        cp -a "$kde_src/plasma/desktoptheme/Monochrome" \
+              "$ISO_DIR/airootfs/usr/share/plasma/desktoptheme/"
+    fi
+
+    # Plasma look-and-feel
+    if [[ -d "$kde_src/plasma/look-and-feel/Monochrome" ]]; then
+        mkdir -p "$ISO_DIR/airootfs/usr/share/plasma/look-and-feel"
+        cp -a "$kde_src/plasma/look-and-feel/Monochrome" \
+              "$ISO_DIR/airootfs/usr/share/plasma/look-and-feel/"
+    fi
+
+    # Aurorae window decorations
+    if [[ -d "$kde_src/aurorae/themes/MonochromeBlur" ]]; then
+        mkdir -p "$ISO_DIR/airootfs/usr/share/aurorae/themes"
+        cp -a "$kde_src/aurorae/themes/MonochromeBlur" \
+              "$ISO_DIR/airootfs/usr/share/aurorae/themes/"
+    fi
+
+    # Color scheme
+    if [[ -f "$kde_src/color-schemes/Monochrome.colors" ]]; then
+        mkdir -p "$ISO_DIR/airootfs/usr/share/color-schemes"
+        cp -f "$kde_src/color-schemes/Monochrome.colors" \
+              "$ISO_DIR/airootfs/usr/share/color-schemes/"
+    fi
+
+    # GTK theme
+    if [[ -d "$kde_src/gtk/Monochrome" ]]; then
+        mkdir -p "$ISO_DIR/airootfs/usr/share/themes"
+        cp -a "$kde_src/gtk/Monochrome" \
+              "$ISO_DIR/airootfs/usr/share/themes/"
+    fi
+
+    # Konsole color scheme
+    if [[ -f "$kde_src/konsole/Monochrome.colorscheme" ]]; then
+        mkdir -p "$ISO_DIR/airootfs/usr/share/konsole"
+        cp -f "$kde_src/konsole/Monochrome.colorscheme" \
+              "$ISO_DIR/airootfs/usr/share/konsole/"
+    fi
+
+    # SDDM theme
+    if [[ -d "$kde_src/sddm/themes/monochrome" ]]; then
+        mkdir -p "$ISO_DIR/airootfs/usr/share/sddm/themes"
+        cp -a "$kde_src/sddm/themes/monochrome" \
+              "$ISO_DIR/airootfs/usr/share/sddm/themes/"
+    fi
+
+    chmod -R a+rX "$ISO_DIR/airootfs/usr/share/plasma/desktoptheme/Monochrome" 2>/dev/null || true
+    chmod -R a+rX "$ISO_DIR/airootfs/usr/share/plasma/look-and-feel/Monochrome" 2>/dev/null || true
+    chmod -R a+rX "$ISO_DIR/airootfs/usr/share/aurorae/themes/MonochromeBlur" 2>/dev/null || true
+    chmod -R a+rX "$ISO_DIR/airootfs/usr/share/themes/Monochrome" 2>/dev/null || true
+    chmod -R a+rX "$ISO_DIR/airootfs/usr/share/sddm/themes/monochrome" 2>/dev/null || true
+    chmod 644 "$ISO_DIR/airootfs/usr/share/color-schemes/Monochrome.colors" 2>/dev/null || true
+    chmod 644 "$ISO_DIR/airootfs/usr/share/konsole/Monochrome.colorscheme" 2>/dev/null || true
+
+    echo "✅ KDE theme assets injected into live ISO."
 fi
 
 # --- 2. Custom Repository Generation ---
@@ -250,6 +314,22 @@ if [ -f "$ISO_DIR/profiledef.sh" ]; then
             print "  [\"/etc/fastfetch\"]=\"0:0:755\""
             print "  [\"/etc/fastfetch/logo.txt\"]=\"0:0:644\""
             print "  [\"/etc/fastfetch/config.jsonc\"]=\"0:0:644\""
+            print "  [\"/usr/share/plasma/desktoptheme/\"]=\"0:0:755\""
+            print "  [\"/usr/share/plasma/desktoptheme/Monochrome/\"]=\"0:0:755\""
+            print "  [\"/usr/share/plasma/look-and-feel/\"]=\"0:0:755\""
+            print "  [\"/usr/share/plasma/look-and-feel/Monochrome/\"]=\"0:0:755\""
+            print "  [\"/usr/share/aurorae/\"]=\"0:0:755\""
+            print "  [\"/usr/share/aurorae/themes/\"]=\"0:0:755\""
+            print "  [\"/usr/share/aurorae/themes/MonochromeBlur/\"]=\"0:0:755\""
+            print "  [\"/usr/share/color-schemes/\"]=\"0:0:755\""
+            print "  [\"/usr/share/color-schemes/Monochrome.colors\"]=\"0:0:644\""
+            print "  [\"/usr/share/themes/\"]=\"0:0:755\""
+            print "  [\"/usr/share/themes/Monochrome/\"]=\"0:0:755\""
+            print "  [\"/usr/share/konsole/\"]=\"0:0:755\""
+            print "  [\"/usr/share/konsole/Monochrome.colorscheme\"]=\"0:0:644\""
+            print "  [\"/usr/share/sddm/themes/\"]=\"0:0:755\""
+            print "  [\"/usr/share/sddm/themes/monochrome/\"]=\"0:0:755\""
+
             inserted=1
         }
     }' "$ISO_DIR/profiledef.sh" > "$tmp_profile"

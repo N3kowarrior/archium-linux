@@ -1,24 +1,32 @@
 # Archium Linux 🐧
-- Archium Linux is based on Arch Linux and aims to make Arch easier to use, easier to build yourself, and preconfigured with user-selectable options. The goal is to make installation approachable even for Windows users.
+- Archium Linux is based on Arch Linux and aims to make Arch easier to install, removing the headace of configuring the system, providing meaningful performance gains. 
 
-## Warning still not production ready
-- DO NOT INSTALL ON REAL HARDWARE 🔴
-- NOT TESTED ON REAL HARDWARE 🔴
-- PLEASE REPORT ISSUES IF YOU ARE MAD ENOUGH TO INSTALL ON REAL HARDWARE 💭
+## Warning Archium linux is still in early stage and it might change or break with updates 🔴
+- If you find any bugs, capture screenshots, provide relevant logs, speak english, open new issues.
+
 ## Features: 🧰
-- [Linux ltg kernel](https://github.com/frogging-family/linux-tkg)
+- [Linux LTG kernel](https://github.com/frogging-family/linux-tkg)
 - Easy TUI installer, based on dialog.
 - Automatic configuration, based on user input.
-- Preinstallation of Paru and Selection of programs. (Some programs are precompiled for faster installation)
+- Precompiled Nvidia aur driver, paru and few utilities
+- [Papirus Icons](https://github.com/PapirusDevelopmentTeam/papirus-icon-theme)
+- [Monochrome-kde theme](https://github.com/pwyde/monochrome-kde)
 - Custom backgrounds (My own work, very silly).
+- Btrfs or Ext4 installation
+- Smart disk selector
+
+## Smart disk selector 🎀
+- Smallest SSD will be used for root partition, second smallest will be used for home, other any selected drive will be formated and mounted under /mnt/. If no ssd is selected, same logic is applied.
+
+## Archium repo 🎀
+- Archium repo is currently "hosted" on github, you can visit it [here](https://github.com/N3kowarrior/archium-repo/releases/tag/stable).
+
 ## TODO: 🛠️
 - Write docs
-- Make the archium repo and host it somewhere.
-- Make custom updater and cycle.
 - Add guard rails for newbie users.
 - Add gui updater which updates when needed with needed changes.
 - Figure out more optimizations.
-- Theme kde plasma, preset kde plasma keyboard settings.
+- Grub theme
 
 ## Showcase: 🖼️
 ### Archium linux with Ext4 in vm:
@@ -28,14 +36,6 @@
 ![Archium Screenshot](https://github.com/N3kowarrior/archium-linux/blob/main/assets/showcase_btrfs.png)
 - Warning, install script fails at the end while installing with btrfs, ignore it and reboot your vm
 
-## Downloads for early testers: 📁
-### Filebin (29.3.26):
-- [Download from here](https://filebin.net/lqb8j7witntvgjsf)
-### Wormhole only until (24.3.26):
-- [Download from here](https://wormhole.app/eERllY#zLOwNrQgniXQppm_UE2qag)
-### file.kiwi:
-- [Download from here](https://file.kiwi/9ebe7b8f#ur9IPaxfqSQurFa-11Gu9g)
-### filemail.com (30.3.26):
-- [Download from here](https://www.filemail.com/d/lyrlpwudebfouve)
-### google drive:
-- [Download from here](https://drive.google.com/file/d/1rNEXi0gsDmmlOPo0eYueUnwWPWGKrOtt/view?usp=sharing)
+## Downloads for early adopters: 📁
+[![Download archium-linux](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/archium-linux/files/Releases/)
+

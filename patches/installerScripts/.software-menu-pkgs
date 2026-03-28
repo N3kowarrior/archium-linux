@@ -31,7 +31,7 @@ PKG|lutris|Game launcher hub|off
 SECTION|INTERNET & SOCIAL
 PKG|discord|Discord|off
 PKG|firefox|Firefox|on
-PKG|librewolf|LibreWolf|off
+PKG|librewolf-bin|LibreWolf|off
 PKG|waterfox-bin|Waterfox|off
 PKG|brave-bin|Brave|off
 PKG|google-chrome|Google Chrome|off

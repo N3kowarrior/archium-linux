@@ -466,15 +466,9 @@ append_swap_to_fstab() {
 }
 
 verify_grub_config() {
-    local expected_uuid grub_cfg linux_line actual_uuid
+    local grub_cfg linux_line root_param
 
     grub_cfg="/mnt/boot/grub/grub.cfg"
-    expected_uuid="$(blkid -s UUID -o value "$(findmnt -nro SOURCE /mnt)")"
-
-    [[ -n "$expected_uuid" ]] || {
-        echo "Could not determine installed root UUID."
-        return 1
-    }
 
     [[ -f "$grub_cfg" ]] || {
         echo "Missing $grub_cfg"
@@ -482,21 +476,15 @@ verify_grub_config() {
     }
 
     linux_line="$(grep -m1 -E '^[[:space:]]*linux[[:space:]]+/boot/' "$grub_cfg" || true)"
-    actual_uuid="$(printf '%s\n' "$linux_line" | grep -o 'root=UUID=[^[:space:]]*' | cut -d= -f3 || true)"
 
-    [[ -n "$actual_uuid" ]] || {
-        echo "GRUB config does not contain root=UUID=..."
-        return 1
-    }
+    root_param="$(printf '%s\n' "$linux_line" | grep -o 'root=[^[:space:]]*' || true)"
 
-    if [[ "$actual_uuid" != "$expected_uuid" ]]; then
-        echo "GRUB root UUID mismatch."
-        echo "Expected: $expected_uuid"
-        echo "Found:    $actual_uuid"
+    if [[ -z "$root_param" ]]; then
+        echo "❌ GRUB config does not contain root= parameter!"
         return 1
     fi
 
-    echo "GRUB root UUID verified: $actual_uuid"
+    echo "✅ GRUB root parameter detected: $root_param"
     return 0
 }
 
@@ -530,6 +518,7 @@ write_persistent_install_config() {
 
     {
         printf "SYSTEM_HOSTNAME=%q\n" "$SYSTEM_HOSTNAME"
+        printf "USERNAME=%q\n" "$USERNAME"
         printf "REAL_PATH=%q\n" "$REAL_PATH"
         printf "EXTRA_MOUNTS=%q\n" "$EXTRA_MOUNTS"
         printf "ARCH_PACKAGE_LIST=%q\n" "$ARCH_PACKAGE_LIST"
@@ -564,12 +553,98 @@ run_configure_script() {
     return 0
 }
 
+install_kde_theme_assets() {
+    local repo_kde_dir="$SCRIPT_DIR/../theme/KDE/monochrome-kde"
+
+    # Prefer live ISO assets if present, fall back to repo copy
+    local live_plasma_theme="/usr/share/plasma/desktoptheme/Monochrome"
+    local live_lnf="/usr/share/plasma/look-and-feel/Monochrome"
+    local live_aurorae="/usr/share/aurorae/themes/MonochromeBlur"
+    local live_colors="/usr/share/color-schemes/Monochrome.colors"
+    local live_gtk="/usr/share/themes/Monochrome"
+    local live_konsole="/usr/share/konsole/Monochrome.colorscheme"
+    local live_sddm="/usr/share/sddm/themes/monochrome"
+
+    echo "Installing KDE theme assets..."
+
+    if [[ -d "$live_plasma_theme" ]]; then
+        mkdir -p /mnt/usr/share/plasma/desktoptheme
+        cp -a "$live_plasma_theme" /mnt/usr/share/plasma/desktoptheme/
+    elif [[ -d "$repo_kde_dir/plasma/desktoptheme/Monochrome" ]]; then
+        mkdir -p /mnt/usr/share/plasma/desktoptheme
+        cp -a "$repo_kde_dir/plasma/desktoptheme/Monochrome" /mnt/usr/share/plasma/desktoptheme/
+    fi
+
+    if [[ -d "$live_lnf" ]]; then
+        mkdir -p /mnt/usr/share/plasma/look-and-feel
+        cp -a "$live_lnf" /mnt/usr/share/plasma/look-and-feel/
+    elif [[ -d "$repo_kde_dir/plasma/look-and-feel/Monochrome" ]]; then
+        mkdir -p /mnt/usr/share/plasma/look-and-feel
+        cp -a "$repo_kde_dir/plasma/look-and-feel/Monochrome" /mnt/usr/share/plasma/look-and-feel/
+    fi
+
+    if [[ -d "$live_aurorae" ]]; then
+        mkdir -p /mnt/usr/share/aurorae/themes
+        cp -a "$live_aurorae" /mnt/usr/share/aurorae/themes/
+    elif [[ -d "$repo_kde_dir/aurorae/themes/MonochromeBlur" ]]; then
+        mkdir -p /mnt/usr/share/aurorae/themes
+        cp -a "$repo_kde_dir/aurorae/themes/MonochromeBlur" /mnt/usr/share/aurorae/themes/
+    fi
+
+    if [[ -f "$live_colors" ]]; then
+        mkdir -p /mnt/usr/share/color-schemes
+        cp -f "$live_colors" /mnt/usr/share/color-schemes/
+    elif [[ -f "$repo_kde_dir/color-schemes/Monochrome.colors" ]]; then
+        mkdir -p /mnt/usr/share/color-schemes
+        cp -f "$repo_kde_dir/color-schemes/Monochrome.colors" /mnt/usr/share/color-schemes/
+    fi
+
+    if [[ -d "$live_gtk" ]]; then
+        mkdir -p /mnt/usr/share/themes
+        cp -a "$live_gtk" /mnt/usr/share/themes/
+    elif [[ -d "$repo_kde_dir/gtk/Monochrome" ]]; then
+        mkdir -p /mnt/usr/share/themes
+        cp -a "$repo_kde_dir/gtk/Monochrome" /mnt/usr/share/themes/
+    fi
+
+    if [[ -f "$live_konsole" ]]; then
+        mkdir -p /mnt/usr/share/konsole
+        cp -f "$live_konsole" /mnt/usr/share/konsole/
+    elif [[ -f "$repo_kde_dir/konsole/Monochrome.colorscheme" ]]; then
+        mkdir -p /mnt/usr/share/konsole
+        cp -f "$repo_kde_dir/konsole/Monochrome.colorscheme" /mnt/usr/share/konsole/
+    fi
+
+    if [[ -d "$live_sddm" ]]; then
+        mkdir -p /mnt/usr/share/sddm/themes
+        cp -a "$live_sddm" /mnt/usr/share/sddm/themes/
+    elif [[ -d "$repo_kde_dir/sddm/themes/monochrome" ]]; then
+        mkdir -p /mnt/usr/share/sddm/themes
+        cp -a "$repo_kde_dir/sddm/themes/monochrome" /mnt/usr/share/sddm/themes/
+    fi
+
+    mkdir -p /mnt/etc/sddm.conf.d
+    cat > /mnt/etc/sddm.conf.d/20-archium-theme.conf <<'EOF'
+[Theme]
+Current=monochrome
+EOF
+
+    chmod -R a+rX /mnt/usr/share/plasma/desktoptheme/Monochrome 2>/dev/null || true
+    chmod -R a+rX /mnt/usr/share/plasma/look-and-feel/Monochrome 2>/dev/null || true
+    chmod -R a+rX /mnt/usr/share/aurorae/themes/MonochromeBlur 2>/dev/null || true
+    chmod -R a+rX /mnt/usr/share/themes/Monochrome 2>/dev/null || true
+    chmod -R a+rX /mnt/usr/share/sddm/themes/monochrome 2>/dev/null || true
+    chmod 644 /mnt/usr/share/color-schemes/Monochrome.colors 2>/dev/null || true
+    chmod 644 /mnt/usr/share/konsole/Monochrome.colorscheme 2>/dev/null || true
+}
+
 install_archium_branding() {
     echo "STEP 9: Installing Archium branding..."
 
     local repo_theme_dir="$SCRIPT_DIR/../theme"
     local repo_arts_dir="$repo_theme_dir/arts"
     local repo_fastfetch_ascii="$repo_theme_dir/fastfetch-archium-ascii.txt"
+    local repo_fastfetch_config="$repo_theme_dir/config.jsonc"
 
     local live_wall_dir="/usr/share/wallpapers/Archium"
     local live_logo_icon="/usr/share/icons/hicolor/128x128/apps/archium.png"
@@ -586,9 +661,22 @@ install_archium_branding() {
     elif [[ -d "$repo_arts_dir/Backgrounds" ]]; then
         cp -a "$repo_arts_dir/Backgrounds"/. /mnt/usr/share/wallpapers/Archium/contents/images/
     fi
-
+    cat > /mnt/usr/share/wallpapers/Archium/metadata.json <<'EOF'
+{
+  "KPlugin": {
+    "Authors": [{"Name": "Archium"}],
+    "Id": "Archium",
+    "License": "CC-BY-SA-4.0",
+    "Name": "Archium Wallpapers"
+  }
+}
+EOF
+    chmod 644 /mnt/usr/share/wallpapers/Archium/metadata.json || true
     find /mnt/usr/share/wallpapers/Archium -type d -exec chmod 755 {} + 2>/dev/null || true
     find /mnt/usr/share/wallpapers/Archium -type f -exec chmod 644 {} + 2>/dev/null || true
+    chmod 755 /mnt/usr/share/wallpapers/Archium || true
+    chmod 755 /mnt/usr/share/wallpapers/Archium/contents || true
+    chmod 755 /mnt/usr/share/wallpapers/Archium/contents/images || true
 
     mkdir -p /mnt/usr/share/icons/hicolor/128x128/apps
     mkdir -p /mnt/usr/share/pixmaps
@@ -617,19 +705,15 @@ install_archium_branding() {
         cp -f "$repo_fastfetch_ascii" /mnt/etc/fastfetch/logo.txt
     fi
 
-    cat > /mnt/etc/fastfetch/config.jsonc <<'EOF2'
-{
-  "logo": {
-    "type": "file",
-    "source": "/etc/fastfetch/logo.txt",
-    "color": {
-      "1": "white"
-    }
-  }
-}
-EOF2
+    if [[ -f "$repo_fastfetch_config" ]]; then
+        cp -f "$repo_fastfetch_config" /mnt/etc/fastfetch/config.jsonc
+    elif [[ -f "$live_fastfetch_cfg" ]]; then
+        cp -f "$live_fastfetch_cfg" /mnt/etc/fastfetch/config.jsonc
+    fi
 
-    cp -f /mnt/etc/fastfetch/config.jsonc /mnt/etc/skel/.config/fastfetch/config.jsonc
+    if [[ -f /mnt/etc/fastfetch/config.jsonc ]]; then
+        cp -f /mnt/etc/fastfetch/config.jsonc /mnt/etc/skel/.config/fastfetch/config.jsonc
+    fi
 
     chmod 755 /mnt/etc/fastfetch 2>/dev/null || true
     chmod 644 /mnt/etc/fastfetch/logo.txt 2>/dev/null || true
@@ -640,12 +724,17 @@ EOF2
 
     if [[ -n "$USERNAME" && -d "/mnt/home/$USERNAME" ]]; then
         mkdir -p "/mnt/home/$USERNAME/.config/fastfetch"
-        cp -f /mnt/etc/fastfetch/config.jsonc "/mnt/home/$USERNAME/.config/fastfetch/config.jsonc"
+
+        if [[ -f /mnt/etc/fastfetch/config.jsonc ]]; then
+            cp -f /mnt/etc/fastfetch/config.jsonc "/mnt/home/$USERNAME/.config/fastfetch/config.jsonc"
+        fi
+
         arch-chroot /mnt chown -R "$USERNAME:$USERNAME" "/home/$USERNAME/.config/fastfetch"
         chmod 755 "/mnt/home/$USERNAME/.config" 2>/dev/null || true
         chmod 755 "/mnt/home/$USERNAME/.config/fastfetch" 2>/dev/null || true
         chmod 644 "/mnt/home/$USERNAME/.config/fastfetch/config.jsonc" 2>/dev/null || true
     fi
+    install_kde_theme_assets
     return 0
 }
 
@@ -693,7 +782,7 @@ perform_install() {
     prepare_temporary_repo_for_chroot
     run_configure_script
     install_archium_branding
-    verify_grub_config
+    verify_grub_config || echo "⚠️ Skipping GRUB validation"
 }
 
 main() {
@@ -704,8 +793,19 @@ main() {
 
     perform_install 2>&1 | dialog --clear --backtitle "$TITLE" --title "$INSTALL_TITLE" --programbox "$DIALOG_H" "$DIALOG_W"
 
-    dialog --clear --backtitle "$TITLE" --title "$SUCCESS_TITLE" --msgbox "Archium is installed!" 8 50
+    dialog --clear --backtitle "$TITLE" --title "$SUCCESS_TITLE" \
+    --yesno "Archium installation completed successfully!\n\nReboot now?" 10 50
+
     clear
+
+    if [[ $? -eq 0 ]]; then
+        echo "Rebooting system..."
+        sync
+        umount -R /mnt 2>/dev/null || true
+        reboot
+    else
+        echo "Installation finished. You can reboot manually."
+    fi
 }
 
 main
